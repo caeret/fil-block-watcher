@@ -44,9 +44,7 @@ func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node
 	if err != nil {
 		return nil, err
 	}
-	bootstrapCtx, cancel := context.WithTimeout(ctx, cfg.bootstrapTimeout)
-	defer cancel()
-	ha, err := makeRoutedHost(bootstrapCtx, cfg.logger, cfg.listenPort, privkey, peers)
+	ha, err := makeRoutedHost(ctx, cfg, privkey, peers)
 	if err != nil {
 		return nil, err
 	}
