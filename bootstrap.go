@@ -75,6 +75,7 @@ func bootstrapConnect(ctx context.Context, logger logging.Logger, ph host.Host, 
 			count++
 		}
 	}
+	logger.Debug("bootstrap all finish.", "success", len(peers)-count)
 	if count == len(peers) {
 		return fmt.Errorf("fail to bootstrap: %w", err)
 	}

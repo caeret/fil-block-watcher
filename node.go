@@ -2,6 +2,7 @@ package filblockwatcher
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -10,6 +11,7 @@ import (
 	"github.com/caeret/logging"
 	"github.com/filecoin-project/lotus/chain/types"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -28,18 +30,23 @@ type Node struct {
 	hello  atomic.Value
 }
 
-func NewNode(ctx context.Context, opts ...Option) (*Node, error) {
+func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node, error) {
 	cfg := defaultCfg
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+
+	if privkey == nil {
+		return nil, errors.New("private key is required")
+	}
+
 	peers, err := convertPeers(strings.Split(FilPeers, "\n"))
 	if err != nil {
 		return nil, err
 	}
 	bootstrapCtx, cancel := context.WithTimeout(ctx, cfg.bootstrapTimeout)
 	defer cancel()
-	ha, err := makeRoutedHost(bootstrapCtx, cfg.logger, cfg.listenPort, 0, peers)
+	ha, err := makeRoutedHost(bootstrapCtx, cfg.logger, cfg.listenPort, privkey, peers)
 	if err != nil {
 		return nil, err
 	}

@@ -2,10 +2,7 @@ package filblockwatcher
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
-	"io"
-	mrand "math/rand"
 	"time"
 
 	"github.com/caeret/logging"
@@ -19,19 +16,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func makeRoutedHost(ctx context.Context, logger logging.Logger, listenPort int, randseed int64, bootstrapPeers []peer.AddrInfo) (*routedhost.RoutedHost, error) {
-	var r io.Reader
-	if randseed == 0 {
-		r = rand.Reader
-	} else {
-		r = mrand.New(mrand.NewSource(randseed))
-	}
-
-	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
-	if err != nil {
-		return nil, err
-	}
-
+func makeRoutedHost(ctx context.Context, logger logging.Logger, listenPort int, priv crypto.PrivKey, bootstrapPeers []peer.AddrInfo) (*routedhost.RoutedHost, error) {
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", listenPort)),
 		libp2p.Identity(priv),
