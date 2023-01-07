@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/caeret/logging"
@@ -25,9 +25,10 @@ const (
 )
 
 type Node struct {
-	logger logging.Logger
-	ha     *routedhost.RoutedHost
-	hello  atomic.Value
+	logger    logging.Logger
+	ha        *routedhost.RoutedHost
+	hello     *HelloMessage
+	helloCond *sync.Cond
 }
 
 func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node, error) {
@@ -48,7 +49,8 @@ func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node
 	if err != nil {
 		return nil, err
 	}
-	return &Node{logger: cfg.logger, ha: ha}, nil
+
+	return &Node{logger: cfg.logger, ha: ha, helloCond: sync.NewCond(&sync.Mutex{})}, nil
 }
 
 func (n *Node) Run() error {
@@ -72,7 +74,10 @@ func (n *Node) handleHello(s network.Stream) {
 	}
 	arrived := time.Now()
 
-	n.hello.Store(hmsg)
+	n.helloCond.L.Lock()
+	n.hello = &hmsg
+	n.helloCond.L.Unlock()
+	n.helloCond.Broadcast()
 
 	n.logger.Debug("received hello.", "addr", s.Conn().RemoteMultiaddr(), "peer", s.Conn().RemotePeer(), "height", hmsg.HeaviestTipSetHeight)
 
@@ -100,11 +105,12 @@ func (n *Node) runSayHello(sub event.Subscription) {
 func (n *Node) sayHello(ctx context.Context, pid peer.ID) error {
 	n.logger.Debug("say hello", "peer", pid, "addr", n.ha.Peerstore().Addrs(pid))
 
-	hmsg, ok := n.hello.Load().(HelloMessage)
-	if !ok {
-		n.logger.Warn("skip for no hello.")
-		return nil
+	n.helloCond.L.Lock()
+	if n.hello == nil {
+		n.helloCond.Wait()
 	}
+	hmsg := *n.hello
+	n.helloCond.L.Unlock()
 
 	s, err := n.ha.NewStream(ctx, pid, HelloProtocol)
 	if err != nil {
