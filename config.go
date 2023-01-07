@@ -13,9 +13,10 @@ var defaultCfg = config{
 }
 
 type config struct {
-	logger           logging.Logger
-	bootstrapTimeout time.Duration
-	listenPort       int
+	logger            logging.Logger
+	bootstrapTimeout  time.Duration
+	listenPort        int
+	BlockEventHandler BlockEventHandler
 }
 
 type Option func(cfg *config)
@@ -35,5 +36,11 @@ func BootstrapTimeout(duration time.Duration) Option {
 func ListenPort(port int) Option {
 	return func(cfg *config) {
 		cfg.listenPort = port
+	}
+}
+
+func WithBlockEventHandler(handler BlockEventHandler) Option {
+	return func(cfg *config) {
+		cfg.BlockEventHandler = handler
 	}
 }

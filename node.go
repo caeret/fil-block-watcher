@@ -24,11 +24,14 @@ const (
 	BlockProtocol = "/fil/blocks/testnetnet"
 )
 
+type BlockEventHandler func(msg types.BlockMsg)
+
 type Node struct {
 	logger    logging.Logger
 	ha        *routedhost.RoutedHost
 	hello     *HelloMessage
 	helloCond *sync.Cond
+	handler   BlockEventHandler
 }
 
 func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node, error) {
@@ -50,7 +53,12 @@ func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node
 		return nil, err
 	}
 
-	return &Node{logger: cfg.logger, ha: ha, helloCond: sync.NewCond(&sync.Mutex{})}, nil
+	n := &Node{logger: cfg.logger, ha: ha, helloCond: sync.NewCond(&sync.Mutex{}), handler: cfg.BlockEventHandler}
+	if n.handler == nil {
+		n.handler = n.handleBlockEvent
+	}
+
+	return n, nil
 }
 
 func (n *Node) Run() error {
@@ -157,8 +165,12 @@ func (n *Node) handleIncomingBlocks() error {
 			continue
 		}
 
-		n.logger.Info("received new block msg.", "miner", bmsg.Header.Miner, "cid", bmsg.Cid(), "height", bmsg.Header.Height)
+		n.handler(*bmsg)
 	}
+}
+
+func (n *Node) handleBlockEvent(bmsg types.BlockMsg) {
+	n.logger.Info("received new block msg.", "miner", bmsg.Header.Miner, "cid", bmsg.Cid(), "height", bmsg.Header.Height)
 }
 
 func (n *Node) Peers() peer.IDSlice {
