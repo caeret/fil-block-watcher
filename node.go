@@ -28,16 +28,22 @@ type Node struct {
 	hello  atomic.Value
 }
 
-func NewNode(ctx context.Context, logger logging.Logger, port int) (*Node, error) {
+func NewNode(ctx context.Context, opts ...Option) (*Node, error) {
+	cfg := defaultCfg
+	for _, opt := range opts {
+		opt(&cfg)
+	}
 	peers, err := convertPeers(strings.Split(FilPeers, "\n"))
 	if err != nil {
 		return nil, err
 	}
-	ha, err := makeRoutedHost(ctx, logger, port, 0, peers)
+	bootstrapCtx, cancel := context.WithTimeout(ctx, cfg.bootstrapTimeout)
+	defer cancel()
+	ha, err := makeRoutedHost(bootstrapCtx, cfg.logger, cfg.listenPort, 0, peers)
 	if err != nil {
 		return nil, err
 	}
-	return &Node{logger: logger, ha: ha}, nil
+	return &Node{logger: cfg.logger, ha: ha}, nil
 }
 
 func (n *Node) Run() error {
@@ -142,4 +148,8 @@ func (n *Node) handleIncomingBlocks() error {
 
 		n.logger.Info("received new block msg.", "miner", bmsg.Header.Miner, "cid", bmsg.Cid(), "height", bmsg.Header.Height)
 	}
+}
+
+func (n *Node) Peers() peer.IDSlice {
+	return n.ha.Peerstore().PeersWithAddrs()
 }

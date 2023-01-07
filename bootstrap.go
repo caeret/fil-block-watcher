@@ -59,7 +59,7 @@ func bootstrapConnect(ctx context.Context, logger logging.Logger, ph host.Host, 
 
 			ph.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 			if err := ph.Connect(ctx, p); err != nil {
-				logger.Error("failed to bootstrap", "peer", p.ID, "error", err)
+				logger.Warn("failed to bootstrap", "peer", p.ID, "error", err)
 				errs <- err
 				return
 			}
