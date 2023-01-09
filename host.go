@@ -33,7 +33,7 @@ func makeRoutedHost(ctx context.Context, cfg config, priv crypto.PrivKey, bootst
 	dht, err := dht.New(ctx, bh,
 		dht.Mode(dht.ModeAuto),
 		dht.Datastore(dstore),
-		dht.ProtocolPrefix("/fil/kad/testnetnet"),
+		dht.ProtocolPrefix("/fil/kad/"+NetworkName),
 	)
 	if err != nil {
 		return nil, err

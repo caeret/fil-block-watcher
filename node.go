@@ -20,8 +20,9 @@ import (
 )
 
 const (
+	NetworkName   = "testnetnet"
 	HelloProtocol = "/fil/hello/1.0.0"
-	BlockProtocol = "/fil/blocks/testnetnet"
+	BlockProtocol = "/fil/blocks/" + NetworkName
 )
 
 type BlockEventHandler func(msg types.BlockMsg)
