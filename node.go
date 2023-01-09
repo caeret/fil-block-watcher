@@ -131,8 +131,8 @@ func (n *Node) runSayHello() error {
 	})
 	n.wg.Add(1)
 	go func() {
-		defer n.logger.Debug("shutdown sayhello.")
 		defer n.wg.Done()
+		defer n.logger.Debug("shutdown sayhello.")
 		for evt := range sub.Out() {
 			pic := evt.(event.EvtPeerIdentificationCompleted)
 			go func() {
