@@ -2,13 +2,15 @@ Tool to watch fil p2p block message.
 
 ## Usage
 
-```
+```go
 package main
 
 import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/caeret/logging"
@@ -29,8 +31,7 @@ func main() {
 
 	options := []filblockwatcher.Option{
 		filblockwatcher.WithLogger(logger),
-		filblockwatcher.ListenPort(10000),
-		filblockwatcher.BootstrapTimeout(time.Second * 5),
+		filblockwatcher.BootstrapTimeout(time.Second * 15),
 		filblockwatcher.WithBlockEventHandler(func(msg types.BlockMsg) {
 			fmt.Println("-> received new block msg.", msg.Header.Miner, msg.Header.Cid(), msg.Header.Height)
 		}),
@@ -42,10 +43,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	err = node.Run()
+	err = node.Run(context.TODO())
 	if err != nil {
 		logger.Error("fail to run node.", "error", err)
 		os.Exit(1)
 	}
+
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGINT)
+		<-ch
+		node.Close()
+	}()
+
+	node.Wait()
 }
 ```

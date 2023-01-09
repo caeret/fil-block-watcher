@@ -36,6 +36,9 @@ type Node struct {
 	hello     *HelloMessage
 	helloCond *sync.Cond
 	handler   BlockEventHandler
+
+	cancels []func()
+	wg      sync.WaitGroup
 }
 
 func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node, error) {
@@ -65,15 +68,14 @@ func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node
 	return n, nil
 }
 
-func (n *Node) Run() error {
+func (n *Node) Run(ctx context.Context) error {
 	n.ha.SetStreamHandler(HelloProtocol, n.handleHello)
-	sub, err := n.ha.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted), eventbus.BufSize(1024))
+	err := n.runSayHello()
 	if err != nil {
-		return fmt.Errorf("failed to subscribe to event bus: %w", err)
+		return err
 	}
-	go n.runSayHello(sub)
 
-	n.ps, err = pubsub.NewGossipSub(context.TODO(), n.ha)
+	n.ps, err = pubsub.NewGossipSub(ctx, n.ha)
 	if err != nil {
 		return nil
 	}
@@ -116,16 +118,32 @@ func (n *Node) handleHello(s network.Stream) {
 	_ = msg.MarshalCBOR(s)
 }
 
-func (n *Node) runSayHello(sub event.Subscription) {
-	for evt := range sub.Out() {
-		pic := evt.(event.EvtPeerIdentificationCompleted)
-		go func() {
-			if err := n.sayHello(context.TODO(), pic.Peer); err != nil {
-				n.logger.Debug("failed to say hello", "error", err, "peer", pic.Peer)
-				return
-			}
-		}()
+func (n *Node) runSayHello() error {
+	sub, err := n.ha.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted), eventbus.BufSize(1024))
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to event bus: %w", err)
 	}
+	n.cancels = append(n.cancels, func() {
+		err := sub.Close()
+		if err != nil {
+			n.logger.Error("fail to close say hello sub.", "error", err)
+		}
+	})
+	n.wg.Add(1)
+	go func() {
+		defer n.logger.Debug("shutdown sayhello.")
+		defer n.wg.Done()
+		for evt := range sub.Out() {
+			pic := evt.(event.EvtPeerIdentificationCompleted)
+			go func() {
+				if err := n.sayHello(context.TODO(), pic.Peer); err != nil {
+					n.logger.Debug("failed to say hello", "error", err, "peer", pic.Peer)
+					return
+				}
+			}()
+		}
+	}()
+	return nil
 }
 
 func (n *Node) sayHello(ctx context.Context, pid peer.ID) error {
@@ -162,25 +180,42 @@ func (n *Node) sayHello(ctx context.Context, pid peer.ID) error {
 }
 
 func (n *Node) handleIncomingBlocks() error {
+	ctx, cancel := context.WithCancel(context.TODO())
+	n.cancels = append(n.cancels, func() {
+		cancel()
+	})
+
 	sub, err := n.ps.Subscribe(BlockProtocol)
 	if err != nil {
 		return err
 	}
-	for {
-		msg, err := sub.Next(context.TODO())
-		if err != nil {
-			n.logger.Error("fail to reading next block.", "error", err)
-			continue
-		}
+	n.wg.Add(1)
 
-		bmsg, err := types.DecodeBlockMsg(msg.GetData())
-		if err != nil {
-			n.logger.Error("fail to decode block", "error", err)
-			continue
-		}
+	go func() {
+		defer n.wg.Done()
+		for {
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					n.logger.Debug("shutdown incoming blocks handler.")
+					return
+				default:
+				}
+				n.logger.Error("fail to reading next block.", "error", err)
+				continue
+			}
 
-		n.handler(*bmsg)
-	}
+			bmsg, err := types.DecodeBlockMsg(msg.GetData())
+			if err != nil {
+				n.logger.Error("fail to decode block", "error", err)
+				continue
+			}
+
+			n.handler(*bmsg)
+		}
+	}()
+	return nil
 }
 
 func (n *Node) Publish(bmsg types.BlockMsg) error {
@@ -197,4 +232,15 @@ func (n *Node) handleBlockEvent(bmsg types.BlockMsg) {
 
 func (n *Node) Peers() peer.IDSlice {
 	return n.ha.Peerstore().PeersWithAddrs()
+}
+
+func (n *Node) Wait() {
+	n.wg.Wait()
+}
+
+func (n *Node) Close() {
+	n.ha.RemoveStreamHandler(HelloProtocol)
+	for _, cancel := range n.cancels {
+		cancel()
+	}
 }
