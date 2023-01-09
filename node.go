@@ -29,8 +29,10 @@ const (
 type BlockEventHandler func(msg types.BlockMsg)
 
 type Node struct {
-	logger    logging.Logger
-	ha        *routedhost.RoutedHost
+	logger logging.Logger
+	ha     *routedhost.RoutedHost
+	ps     *pubsub.PubSub
+
 	hello     *HelloMessage
 	helloCond *sync.Cond
 	handler   BlockEventHandler
@@ -70,6 +72,11 @@ func (n *Node) Run() error {
 		return fmt.Errorf("failed to subscribe to event bus: %w", err)
 	}
 	go n.runSayHello(sub)
+
+	n.ps, err = pubsub.NewGossipSub(context.TODO(), n.ha)
+	if err != nil {
+		return nil
+	}
 
 	return n.handleIncomingBlocks()
 }
@@ -155,11 +162,7 @@ func (n *Node) sayHello(ctx context.Context, pid peer.ID) error {
 }
 
 func (n *Node) handleIncomingBlocks() error {
-	ps, err := pubsub.NewGossipSub(context.TODO(), n.ha)
-	if err != nil {
-		return nil
-	}
-	sub, err := ps.Subscribe(BlockProtocol)
+	sub, err := n.ps.Subscribe(BlockProtocol)
 	if err != nil {
 		return err
 	}
@@ -178,6 +181,14 @@ func (n *Node) handleIncomingBlocks() error {
 
 		n.handler(*bmsg)
 	}
+}
+
+func (n *Node) Publish(bmsg types.BlockMsg) error {
+	b, err := bmsg.Serialize()
+	if err != nil {
+		return err
+	}
+	return n.ps.Publish(BlockProtocol, b)
 }
 
 func (n *Node) handleBlockEvent(bmsg types.BlockMsg) {
