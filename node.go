@@ -91,6 +91,15 @@ func (n *Node) handleHello(s network.Stream) {
 
 	n.logger.Debug("received hello.", "addr", s.Conn().RemoteMultiaddr(), "peer", s.Conn().RemotePeer(), "height", hmsg.HeaviestTipSetHeight)
 
+	protos, err := n.ha.Peerstore().GetProtocols(s.Conn().RemotePeer())
+	if err != nil {
+		n.logger.Warn("got error from peerstore.GetProtocols.", "error", err)
+	}
+	if len(protos) == 0 {
+		n.logger.Warn("other peer hasnt completed libp2p identify, waiting a bit")
+		time.Sleep(time.Millisecond * 300)
+	}
+
 	defer s.Close()
 	sent := time.Now()
 	msg := &LatencyMessage{
