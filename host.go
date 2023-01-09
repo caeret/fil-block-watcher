@@ -12,6 +12,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	ma "github.com/multiformats/go-multiaddr"
+
+	"github.com/caeret/fil-block-watcher/build"
 )
 
 func makeRoutedHost(ctx context.Context, cfg config, priv crypto.PrivKey, bootstrapPeers []peer.AddrInfo) (*routedhost.RoutedHost, error) {
@@ -33,7 +35,7 @@ func makeRoutedHost(ctx context.Context, cfg config, priv crypto.PrivKey, bootst
 	dht, err := dht.New(ctx, bh,
 		dht.Mode(dht.ModeAuto),
 		dht.Datastore(dstore),
-		dht.ProtocolPrefix("/fil/kad/"+NetworkName),
+		dht.ProtocolPrefix("/fil/kad/"+build.NetWorkName),
 	)
 	if err != nil {
 		return nil, err

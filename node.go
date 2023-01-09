@@ -17,12 +17,13 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
+
+	"github.com/caeret/fil-block-watcher/build"
 )
 
 const (
-	NetworkName   = "testnetnet"
 	HelloProtocol = "/fil/hello/1.0.0"
-	BlockProtocol = "/fil/blocks/" + NetworkName
+	BlockProtocol = "/fil/blocks/" + build.NetWorkName
 )
 
 type BlockEventHandler func(msg types.BlockMsg)
@@ -45,7 +46,7 @@ func NewNode(ctx context.Context, privkey crypto.PrivKey, opts ...Option) (*Node
 		return nil, errors.New("private key is required")
 	}
 
-	peers, err := convertPeers(strings.Split(FilPeers, "\n"))
+	peers, err := convertPeers(strings.Split(build.FilPeers, "\n"))
 	if err != nil {
 		return nil, err
 	}
