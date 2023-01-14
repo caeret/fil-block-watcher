@@ -93,6 +93,14 @@ func (n *Node) handleHello(s network.Stream) {
 	}
 	arrived := time.Now()
 
+	if hmsg.GenesisHash != build.GenesisCID {
+		n.logger.Debug("other peer has different genesis!", "genesis", hmsg.GenesisHash)
+		s.Conn().Close()
+		return
+	}
+
+	defer s.Close()
+
 	n.helloCond.L.Lock()
 	n.hello = &hmsg
 	n.helloCond.L.Unlock()
@@ -109,7 +117,6 @@ func (n *Node) handleHello(s network.Stream) {
 		time.Sleep(time.Millisecond * 300)
 	}
 
-	defer s.Close()
 	sent := time.Now()
 	msg := &LatencyMessage{
 		TArrival: arrived.UnixNano(),
@@ -155,6 +162,8 @@ func (n *Node) sayHello(ctx context.Context, pid peer.ID) error {
 	}
 	hmsg := *n.hello
 	n.helloCond.L.Unlock()
+
+	hmsg.GenesisHash = build.GenesisCID
 
 	s, err := n.ha.NewStream(ctx, pid, HelloProtocol)
 	if err != nil {
